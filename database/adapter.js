@@ -2,6 +2,7 @@ const { AsyncLocalStorage } = require('node:async_hooks');
 const fs = require('node:fs');
 const path = require('node:path');
 const bcrypt = require('bcrypt');
+const { databaseSettings, adminPassword: validateAdminPassword } = require('./config');
 
 // Both deployment modes use SQLite SQL and the same awaited application queries.
 function localAdapter(raw) {
@@ -53,7 +54,7 @@ function cloudAdapter(client) {
 }
 
 async function initializeCloud(db, adminPassword = process.env.ADMIN_PASSWORD) {
-    if (!adminPassword || adminPassword.length < 10 || Buffer.byteLength(adminPassword) > 72) throw new Error('Set ADMIN_PASSWORD to an initial password of 10–72 bytes for hosted deployment.');
+    validateAdminPassword(adminPassword);
     const metadata = await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'portal_meta'").get();
     if (metadata && (await db.prepare("SELECT value FROM portal_meta WHERE key = 'schema_version'").get())?.value === '1') return;
     const hash = await bcrypt.hash(adminPassword, 12);
@@ -96,8 +97,7 @@ async function snapshot(db) {
 }
 
 function hostedDatabase() {
-    const url = process.env.TURSO_DATABASE_URL, authToken = process.env.TURSO_AUTH_TOKEN;
-    if (!url || !authToken || !/^(libsql|https):\/\//.test(url)) throw new Error('Hosted deployment requires TURSO_DATABASE_URL and TURSO_AUTH_TOKEN.');
+    const { url, authToken } = databaseSettings();
     const { createClient } = require('@libsql/client/web');
     return cloudAdapter(createClient({ url, authToken }));
 }
