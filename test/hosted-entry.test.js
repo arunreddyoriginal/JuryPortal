@@ -67,10 +67,11 @@ test('hosted instances share secure sessions and scores; failed startup can reco
     const health = await Promise.all([fetch(first + '/api/health'), fetch(first + '/api/health')]);
     assert.deepEqual(health.map(r => r.status), [200, 200]); assert.equal(initializations, 1);
     const second = await start();
-    const browser = () => ({ cookie: '', async request(base, route, body) {
-        const headers = { 'X-Forwarded-Proto': 'https', 'X-Requested-With': 'JuryPortal', Cookie: this.cookie };
+    const browser = () => ({ cookie: '', round: null, async request(base, route, body) {
+        const headers = { 'X-Forwarded-Proto': 'https', 'X-Requested-With': 'JuryPortal', Cookie: this.cookie, ...(this.round ? { 'X-Portal-Round': String(this.round) } : {}) };
         if (body) headers['Content-Type'] = 'application/json';
         const response = await fetch(base + route, { method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined });
+        if (response.ok && response.headers.get('x-portal-round')) this.round = Number(response.headers.get('x-portal-round'));
         const setCookie = response.headers.get('set-cookie'); if (setCookie) this.cookie = setCookie.split(';')[0];
         return { status: response.status, data: await response.json(), setCookie };
     } });
